@@ -16,7 +16,6 @@ import urllib2
 import sys
 from pymongo import MongoClient
 import re
-import os
 import uuid
 
 OUT_PUT = './thumbnails/'
@@ -110,7 +109,11 @@ def videoTitle(soup, elm, tag, individual=True):
 
 def videoDesc(soup):
 	if len(soup.findAll(attrs={"name":"description"})) is not 0:
-		return soup.findAll(attrs={"name":"description"})[0]['content']
+		desc =  soup.findAll(attrs={"name":"description"})[0]['content']
+		desc = re.sub(r'<("[^"]*"|\'[^\']*\'|[^\'">])*>', '', desc)
+		desc = re.sub(r'\s+','',desc)
+		return desc
+
 	else:
 		return None
 
@@ -136,10 +139,13 @@ def saveVideo(src, soup, url, tag, elm, individual=True):
 	host = urlparse(url)
 	host = host[0] + "://" + host[1]
 
-	if title is None:
-		print "Does not found title in " + url
-	else:
+	if Videos.find_one({title:title}) is None:
+		print "Duplicate : " + title
+		return
+	if title is not None:
 		print "title : " + title
+	else:
+		print "title is empty"
 	if desc is not None:
 		print "desc : " + desc
 	if keyword is not None:
@@ -282,12 +288,10 @@ def videoEnabled(link, tag):
 		soup = BeautifulSoup(session.get(link).content)
 		if soup.find_all('div', 'req_regist_member'):
 			content =  session.get('https://secure.id.fc2.com/?done=video&switch_language=ja').content
-			print content
 			soup = BeautifulSoup(content)
 		if soup.has_attr('cont_v2_hmenu04') and soup['cont_v2_hmenu04'].text is not '(Removed) ****************************':
 			return True
 		else:
-			print link
 			return False
 		
 
