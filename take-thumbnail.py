@@ -1,7 +1,5 @@
 from pymongo import MongoClient
 import requests
-import os
-import uuid
 
 OUT_PUT = './thumbnails/'
 
@@ -11,9 +9,8 @@ DB_CONFIG = {
 	"db"   : "nudele"
 }
 
-def saveImage(url):
-	u = str(uuid.uuid1())
-	with open(OUT_PUT+u,'wb') as f:
+def saveImage(url, _id):
+	with open(OUT_PUT+_id,'wb') as f:
 		raw = requests.get(url).content
 		f.write(raw)
 
@@ -26,12 +23,19 @@ def connectDB():
 def main():
 	Videos = connectDB()
 	for video in Videos.find():
-		videoId = video['url'].split('/')[-1]
-		print 'http://api.erodouga-rin.net/thumbnails?url=http://jp.xvideos.com/video'+videoId+'/'
-		r = requests.get('http://api.erodouga-rin.net/thumbnails?url=http://jp.xvideos.com/video'+videoId+'/')
-		thumbnails = r.json()['thumbnails']
-		saveImage(thumbnails[0])
-
+		if video['tag'] == "xvideos":
+			videoId = video['url'].split('/')[-1]
+			_id = str(video['_id'])
+			print 'http://api.erodouga-rin.net/thumbnails?url=http://jp.xvideos.com/video'+videoId+'/'
+			r = requests.get('http://api.erodouga-rin.net/thumbnails?url=http://jp.xvideos.com/video'+videoId+'/')
+			try:
+				thumbnails = r.json()['thumbnails']
+				saveImage(thumbnails[0], _id)
+			except KeyError:
+				#when video was deleted
+				print "removed ", video.get("_id")
+				Videos.remove({"_id":str(video.get("_id"))})
+				continue
 
 if __name__ == '__main__':
 	main()
