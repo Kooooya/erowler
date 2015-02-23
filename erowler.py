@@ -13,23 +13,24 @@ from pprint import pprint
 from urlparse import urlparse
 import urllib
 import urllib2
-import sys
+import sys, traceback
 from pymongo import MongoClient
 import re
-import uuid
+import json
 
 OUT_PUT = './thumbnails/'
-NG_WORDS = [  #"ad",
-			  "police",
-			  "ranking",
-			  "dmm",
-			  "./",
-			  "#",
-			  "mixi",
-			  'twitter.com',
-			  "facebook",
-			  "google",
-			  "hatena" ]
+NG_WORDS = [
+	"police",
+	"ranking",
+	"dmm",
+	"./",
+	"#",
+	"mixi",
+	'twitter.com',
+	"facebook",
+	"google",
+	"hatena" 
+]
 ALREADY = []
 MAX_DEPTH = 5
 DB_CONFIG = {
@@ -41,13 +42,18 @@ DB_CONFIG = {
 Videos = None
 lastUrl = None
 session = None
+g_snapshot = None
 
 def getNextLink(url, host, depth=0):
+	global g_snapshot
 
-	ok = validateUrl(url)
-	if not ok:
-		return
-	
+	if depth is not 0:
+		ok = validateUrl(url)
+		if not ok:
+			return
+
+	print url
+
 	response = connectSite(url, host)
 
 	try :
@@ -59,8 +65,17 @@ def getNextLink(url, host, depth=0):
 
 	links = findNextLinks(soup)
 
+	"""try:
+		ago = g_snapshot["struct"][depth]
+	except IndexError:
+		ago = g_snapshot["struct"].append(0)
+	if ago is not None:
+		links = links[ago:-1]
+	"""
+
 	if depth < MAX_DEPTH:
-		for link in links:
+		for i,link in enumerate(links):
+			g_snapshot["struct"][depth] = i
 			getNextLink(link, host, depth + 1)
 	return
 
@@ -72,39 +87,42 @@ def connectDB():
 	Videos = db['video']
 
 
-def videoTitle(soup, elm, tag, individual=True):
-
-	if tag is "fc2" and elm["tl"] is not None:
+def videoTitle(soup, elm, tag, individualed=True):
+	if tag is "fc2" and hasattr(elm, "tl"):
 		return elm["tl"]
-
-	if not individual:
+	if not individualed:
 		while elm is not None:
 			for prev in elm.previous_siblings:
 				if prev.name is None:
 					continue
 				match = re.match( r'^h[1-3]', prev.name )
 				if match:
-					return prev.string
-
+					title = prev.string
 			for next in elm.next_siblings:
 				if next.name is None:
 					continue
 				match = re.match( r'^h[1-3]', next.name )
 				if match:
-					return next.string
-
+					title = next.string
 			elm = elm.parent
 			if elm is not None:
 				match = re.match( r'^h[1-3]', elm.name )
 				if match:
-					print elm.name
+					title = match
 
-	if soup.title is not None:
-		return soup.title.get_text()
+	if title is None and soup.title is not None:
+		title =  soup.title.get_text()
 	elif len(soup.findAll(attrs={"name":"title"})) is not 0:
-		return soup.findAll(attrs={"name":"title"})[0]['content']
+		title =  soup.findAll(attrs={"name":"title"})[0]['content']
 	else:
-		return None
+		title = None
+
+	if title is not None:
+		counts = len(Videos.findAll({"title":re.compile('.*'+title+'.*')}))
+		if counts >= 1:
+			title = title+' '+str(counts)
+
+	return title.split("｜")[0]
 
 
 def videoDesc(soup):
@@ -113,7 +131,6 @@ def videoDesc(soup):
 		desc = re.sub(r'<("[^"]*"|\'[^\']*\'|[^\'">])*>', '', desc)
 		desc = re.sub(r'\s+','',desc)
 		return desc
-
 	else:
 		return None
 
@@ -128,40 +145,37 @@ def videoKeyword(soup):
 
 
 
-def saveVideo(src, soup, url, tag, elm, individual=True):
+def saveVideo(src, soup, url, tag, elm, individualed=True):
 	global Videos
 
-	title = videoTitle(soup, elm, tag).split("｜")[0]
-	desc = videoDesc(soup)
-	keyword = videoKeyword(soup)
-	thumbnail = takeThumbnail(src, tag)
+	title = videoTitle(soup, elm, tag)
 
-	host = urlparse(url)
-	host = host[0] + "://" + host[1]
-
-	if Videos.find_one({title:title}) is None:
-		print "Duplicate : " + title
-		return
 	if title is not None:
 		print "title : " + title
 	else:
 		print "title is empty"
+		return
+
+	desc = videoDesc(soup)
+	keyword = videoKeyword(soup)
+
 	if desc is not None:
 		print "desc : " + desc
 	if keyword is not None:
 		print "keyword : " + keyword
-	print "thumb : " + thumbnail
 	print "src : " + src
 	print "tag : " + tag
 	print "in " + url
 	print
 
+	owner = urlparse(url)
+	owner = host[0] + "://" + host[1]
+
 	video = {
-		"thumb" : thumbnail,
 		"title" : title,
 		"url"	: src,
 		"desc"	: desc,
-		"owner" : host,
+		"owner" : owner,
 		"tag"	: tag,
 		"parent"  : url,
 		"keyword" : keyword
@@ -184,19 +198,19 @@ def searchVideo(url, soup):
 	fc2_sources = soup.findAll('script',{"url":True})
 
 	#Is page individual?.
-	individual = True
+	individualed = True
 	if len(xvideos_sources) + len(fc2_sources) > 2:
-		individual = False
+		individualed = False
 
 	#xvideos
 	for source in xvideos_sources:
 		if source.has_attr("src") and "xvideos.com" in source['src']:
 			if videoEnabled(source['src'], 'xvideos'):
-				saveVideo(source["src"], soup, url, 'xvideos', source, individual)
+				saveVideo(source["src"], soup, url, 'xvideos', source, individualed)
 	#fc2
 	for source in fc2_sources:
 		if videoEnabled(source['url'], 'fc2'):
-			saveVideo(source['url'], soup, url, 'fc2', source, individual)
+			saveVideo(source['url'], soup, url, 'fc2', source, individualed)
 		
 
 
@@ -244,10 +258,19 @@ Validate a URL. If NG_WORDS include it, skip it, else NG_WORDS append it and jus
 '''
 def validateUrl(url):
 
-	p = urlparse(url)
-	path = p[2]
+	parsed = urlparse(url)
+	path = parsed.path.encode('utf-8')
+	params = parsed.query.encode('utf-8')
+
 	if path in ALREADY:
 		return
+	elif path is not "/" and path is not "":
+		ALREADY.append(path)
+
+	if params in ALREADY:
+		return
+	elif params is not "":
+		ALREADY.append(params)
 
 	#check NG_WOR have including URL
 	for word in NG_WORDS:
@@ -263,9 +286,6 @@ def validateUrl(url):
 					return False
 			except KeyError:
 				pass
-
-	if path is not "/" and path is not "":
-		ALREADY.append(path)
 
 	return True
 
@@ -306,27 +326,29 @@ def loginFc2():
 		print session.cookies['PHPSESSID']
 
 
-def takeThumbnail(url, tag):
-	if tag is 'xvideos':
-		videoId = url.split('/')[-1]
-		r = requests.get('http://api.erodouga-rin.net/thumbnails?url=http://jp.xvideos.com/video'+videoId+'/')
-		thumbnails = r.json()['thumbnails']
-		u = saveImage(thumbnails[0])
-		return u
-		#elif tag is 'fc2':
+def takeSnapshot():
+	print "taked snapshot"
+	g_snapshot["Already"] = ALREADY
+	with open('_snapshot', 'w') as f:
+		json.dump(g_snapshot, f)
 
+def restore(url):
+	global g_snapshot
+	global ALREADY
 
-def saveImage(url):
-	u = str(uuid.uuid1())
-	with open(OUT_PUT+u,'wb') as f:
-		raw = requests.get(url).content
-		f.write(raw)
-	return u
-
-
+	with open('_snapshot', 'r') as f:
+		try:
+			snapshot = json.load(f)
+			g_snapshot = snapshot
+			pprint(g_snapshot)
+			ALREADY = g_snapshot.get('Already')
+		except ValueError:
+			g_snapshot = {
+				"root" : url,
+				"struct" : []
+			}
 
 if __name__ == '__main__':
-
 	reload(sys)
 	sys.setdefaultencoding("utf-8")
 
@@ -341,10 +363,17 @@ if __name__ == '__main__':
 		print "引数へんじゃない？"
 		quit()
 
+	restore(url)
+
 	p = urlparse(url)
 	host = p[0] + "://" + p[1]
 
 	connectDB()
-	getNextLink(url, host)
+	try:
+		getNextLink(url, host)
+	except:
+		traceback.print_exc(file=sys.stdout)
+
+		takeSnapshot()
 
 	pprint(ALREADY)
