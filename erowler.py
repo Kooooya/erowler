@@ -11,12 +11,12 @@ import requests
 from bs4 import BeautifulSoup
 from pprint import pprint
 from urlparse import urlparse
-import urllib
-import urllib2
+import urllib, urllib2
 import sys, traceback
 from pymongo import MongoClient
 import re
 import json
+import random
 
 OUT_PUT = './thumbnails/'
 NG_WORDS = [
@@ -75,7 +75,10 @@ def getNextLink(url, host, depth=0):
 
 	if depth < MAX_DEPTH:
 		for i,link in enumerate(links):
-			g_snapshot["struct"][depth] = i
+			try:
+				g_snapshot["struct"][depth] = i
+			except IndexError:
+				g_snapshot["struct"].append(0)
 			getNextLink(link, host, depth + 1)
 	return
 
@@ -88,9 +91,10 @@ def connectDB():
 
 
 def videoTitle(soup, elm, tag, individualed=True):
+	title = None
 	if tag is "fc2" and hasattr(elm, "tl"):
-		return elm["tl"]
-	if not individualed:
+		title = elm["tl"]
+	elif not individualed:
 		while elm is not None:
 			for prev in elm.previous_siblings:
 				if prev.name is None:
@@ -109,8 +113,7 @@ def videoTitle(soup, elm, tag, individualed=True):
 				match = re.match( r'^h[1-3]', elm.name )
 				if match:
 					title = match
-
-	if title is None and soup.title is not None:
+	elif title is None and soup.title is not None:
 		title =  soup.title.get_text()
 	elif len(soup.findAll(attrs={"name":"title"})) is not 0:
 		title =  soup.findAll(attrs={"name":"title"})[0]['content']
@@ -118,9 +121,10 @@ def videoTitle(soup, elm, tag, individualed=True):
 		title = None
 
 	if title is not None:
-		counts = len(Videos.findAll({"title":re.compile('.*'+title+'.*')}))
-		if counts >= 1:
-			title = title+' '+str(counts)
+		count = Videos.find({"title":re.compile('.*'+title+'.*')}).count()
+		pprint(count)
+		if count >= 1:
+			title = title+' No.'+str(count)
 
 	return title.split("｜")[0]
 
@@ -205,13 +209,12 @@ def searchVideo(url, soup):
 	#xvideos
 	for source in xvideos_sources:
 		if source.has_attr("src") and "xvideos.com" in source['src']:
-			if videoEnabled(source['src'], 'xvideos'):
-				saveVideo(source["src"], soup, url, 'xvideos', source, individualed)
+			#if videoEnabled(source['src'], 'xvideos'):
+			saveVideo(source["src"], soup, url, 'xvideos', source, individualed)
 	#fc2
 	for source in fc2_sources:
-		if videoEnabled(source['url'], 'fc2'):
-			saveVideo(source['url'], soup, url, 'fc2', source, individualed)
-		
+		#if videoEnabled(source['url'], 'fc2'):
+		saveVideo(source['url'], soup, url, 'fc2', source, individualed)
 
 
 def connectSite(url, host):
@@ -259,8 +262,8 @@ Validate a URL. If NG_WORDS include it, skip it, else NG_WORDS append it and jus
 def validateUrl(url):
 
 	parsed = urlparse(url)
-	path = parsed.path.encode('utf-8')
-	params = parsed.query.encode('utf-8')
+	path = parsed.path
+	params = parsed.query
 
 	if path in ALREADY:
 		return
@@ -289,6 +292,7 @@ def validateUrl(url):
 
 	return True
 
+"""
 def videoEnabled(link, tag):
 	if tag is 'xvideos':
 		videoId = link.split('/')[-1]
@@ -313,7 +317,7 @@ def videoEnabled(link, tag):
 			return True
 		else:
 			return False
-		
+"""
 
 
 def loginFc2():
@@ -327,26 +331,33 @@ def loginFc2():
 
 
 def takeSnapshot():
-	print "taked snapshot"
+	print "take snapshot"
 	g_snapshot["Already"] = ALREADY
 	with open('_snapshot', 'w') as f:
 		json.dump(g_snapshot, f)
 
-def restore(url):
+def restore():
 	global g_snapshot
 	global ALREADY
 
 	with open('_snapshot', 'r') as f:
-		try:
-			snapshot = json.load(f)
-			g_snapshot = snapshot
-			pprint(g_snapshot)
-			ALREADY = g_snapshot.get('Already')
-		except ValueError:
-			g_snapshot = {
-				"root" : url,
-				"struct" : []
-			}
+		snapshot = json.load(f)
+		g_snapshot = snapshot
+		pprint(g_snapshot)
+		ALREADY = g_snapshot.get('Already')
+	return g_snapshot["root"]
+
+def initSnapshot(url):
+	global g_snapshot
+	print "init snapshot"
+	g_snapshot = {
+		"root" : url,
+		"struct" : []
+	}
+
+def choiceUrl():
+	global g_snapshot
+	return random.choice(g_snapshot.Already[-g_snapshot.struct[MAX_DEPTH]/2:-1])
 
 if __name__ == '__main__':
 	reload(sys)
@@ -355,25 +366,32 @@ if __name__ == '__main__':
 	argvs = sys.argv
 
 	if len(argvs) == 2:
-		url = argvs[1]
+		if argvs[1] == "restart":
+			url = restore()
+			p = urlparse(url)
+			host = p[0] + "://" + p[1]
+		else:
+			url = argvs[1]
+			initSnapshot(url)
+			p = urlparse(url)
+			host = p[0] + "://" + p[1]
 	elif len(argvs) == 3:
 		url = argvs[1]
+		initSnapshot(url)
 		MAX_DEPTH = int(argvs[2])
+		p = urlparse(url)
+		host = p[0] + "://" + p[1]
 	else:
 		print "引数へんじゃない？"
 		quit()
 
-	restore(url)
-
-	p = urlparse(url)
-	host = p[0] + "://" + p[1]
-
 	connectDB()
+
 	try:
 		getNextLink(url, host)
+		print "restart! to "+choiceUrl()
 	except:
 		traceback.print_exc(file=sys.stdout)
-
 		takeSnapshot()
 
 	pprint(ALREADY)
