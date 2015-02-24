@@ -122,7 +122,6 @@ def videoTitle(soup, elm, tag, individualed=True):
 
 	if title is not None:
 		count = Videos.find({"title":re.compile('.*'+title+'.*')}).count()
-		pprint(count)
 		if count >= 1:
 			title = title+' No.'+str(count)
 
@@ -151,6 +150,9 @@ def videoKeyword(soup):
 
 def saveVideo(src, soup, url, tag, elm, individualed=True):
 	global Videos
+
+	if Videos.find_one({"url":src}) is not None:
+		return
 
 	title = videoTitle(soup, elm, tag)
 
