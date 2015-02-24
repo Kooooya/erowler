@@ -17,6 +17,7 @@ from pymongo import MongoClient
 import re
 import json
 import random
+from datetime import datetime
 
 OUT_PUT = './thumbnails/'
 NG_WORDS = [
@@ -156,6 +157,7 @@ def saveVideo(src, soup, url, tag, elm, individualed=True):
 
 	title = videoTitle(soup, elm, tag)
 
+	print
 	if title is not None:
 		print "title : " + title
 	else:
@@ -172,6 +174,9 @@ def saveVideo(src, soup, url, tag, elm, individualed=True):
 	print "src : " + src
 	print "tag : " + tag
 	print "in " + url
+
+	saved_at = datetime.now().strftime('%Y年%m月%d日')
+	print "saved_at : " + saved_at
 	print
 
 	owner = urlparse(url)
@@ -184,7 +189,8 @@ def saveVideo(src, soup, url, tag, elm, individualed=True):
 		"owner" : owner,
 		"tag"	: tag,
 		"parent"  : url,
-		"keyword" : keyword
+		"keyword" : keyword,
+		"saved_at" : saved_at
 	}
 
 	Videos.insert(video)
