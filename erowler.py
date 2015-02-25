@@ -7,16 +7,12 @@ usage :
 
 '''
 
-import requests
 from bs4 import BeautifulSoup
 from pprint import pprint
 from urlparse import urlparse
 import urllib, urllib2
-import sys, traceback
 from pymongo import MongoClient
-import re
-import json
-import random
+import requests, sys, traceback, re, json, random
 from datetime import datetime
 
 OUT_PUT = './thumbnails/'
@@ -55,9 +51,7 @@ def getNextLink(url, prev_url, depth=0):
 
 	url = absolute(url, prev_url)
 	print url
-
 	response = connectSite(url)
-
 	try :
 		soup = BeautifulSoup(response.read())
 	except AttributeError:
@@ -66,14 +60,6 @@ def getNextLink(url, prev_url, depth=0):
 	searchVideo(url, soup)
 
 	links = findNextLinks(soup)
-
-	"""try:
-		ago = g_snapshot["struct"][depth]
-	except IndexError:
-		ago = g_snapshot["struct"].append(0)
-	if ago is not None:
-		links = links[ago:-1]
-	"""
 
 	if depth < MAX_DEPTH:
 		for i,link in enumerate(links):
@@ -130,6 +116,7 @@ def format(title):
 		count = Videos.find({"title":re.compile('.*'+title+'.*')}).count()
 		if count >= 1 and re.match(r"[0-9]+$", title):
 			title = title+' No.'+str(count)
+	#title = re.sub("【.*】", "", title)  【ガチエロ速報】
 	return title.split("｜")[0]
 
 def videoDesc(soup):
@@ -266,7 +253,6 @@ def connectSite(url):
 
 
 def validateUrl(url):
-
 	parsed = urlparse(url)
 	path = parsed.path
 	params = parsed.query
