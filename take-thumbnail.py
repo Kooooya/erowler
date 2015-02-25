@@ -1,7 +1,9 @@
 from pymongo import MongoClient
 import requests
+import re
+import sys
 
-OUT_PUT = './thumbnails/'
+g_save_path = "./thumbnails/"
 
 DB_CONFIG = {
 	"host" : "localhost",
@@ -10,7 +12,7 @@ DB_CONFIG = {
 }
 
 def saveImage(url, _id):
-	with open(OUT_PUT+_id,'wb') as f:
+	with open(g_save_path+_id,'wb') as f:
 		raw = requests.get(url).content
 		f.write(raw)
 
@@ -20,8 +22,19 @@ def connectDB():
 	Videos = db['video']
 	return Videos
 
+def make_path(path):
+	if not re.match(r"/$", path):
+		path = path + '/'
+	return path + 'thumbnails/'
+
 def main():
+	global g_save_path
+	argv = sys.argv
+	if len(argv) == 2:
+		g_save_path = make_path(argv[1])
+
 	Videos = connectDB()
+
 	for video in Videos.find():
 		if video['tag'] == "xvideos":
 			videoId = video['url'].split('/')[-1]
