@@ -254,29 +254,6 @@ def connectSite(url):
 	#server error
 	except urllib2.HTTPError:
 		return
-		"""
-		#If url is relaytive path, format it to correct format
-		except ValueError:
-			if len(url) > 1 and url[0] is not '/':
-				url = '/' + url
-			url = host + url
-			req = urllib2.Request(url)
-			try:
-				response = urllib2.urlopen(req)
-			#server error
-			except urllib2.HTTPError:
-				return
-			#does not found url
-			except urllib2.URLError:
-				print "Does not found the : " + url
-				return
-			except UnicodeEncodeError:
-				try:
-					req = urllib2.Request(url.encode('utf-8'))
-					response = urllib2.urlopen(req)
-				except urllib2.HTTPError:
-					return
-		"""
 	#does not found url
 	except urllib2.URLError:
 		print "Does not found the : " + url
@@ -288,9 +265,6 @@ def connectSite(url):
 	return response
 
 
-'''
-Validate a URL. If NG_WORDS include it, skip it, else NG_WORDS append it and just continue.
-'''
 def validateUrl(url):
 
 	parsed = urlparse(url)
@@ -323,33 +297,6 @@ def validateUrl(url):
 				pass
 
 	return True
-
-"""
-def videoEnabled(link, tag):
-	if tag is 'xvideos':
-		videoId = link.split('/')[-1]
-		try:
-			req = urllib2.Request('http://jp.xvideos.com/video'+videoId+'/')
-			response = urllib2.urlopen(req)
-		except urllib2.HTTPError:
-			return False
-		soup = BeautifulSoup(response.read())
-		if soup.find('embed') is None:
-			return False
-		else:
-			return True
-
-	if tag is 'fc2':
-		loginFc2()
-		soup = BeautifulSoup(session.get(link).content)
-		if soup.find_all('div', 'req_regist_member'):
-			content =  session.get('https://secure.id.fc2.com/?done=video&switch_language=ja').content
-			soup = BeautifulSoup(content)
-		if soup.has_attr('cont_v2_hmenu04') and soup['cont_v2_hmenu04'].text is not '(Removed) ****************************':
-			return True
-		else:
-			return False
-"""
 
 
 def loginFc2():
