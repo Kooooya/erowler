@@ -121,13 +121,15 @@ def videoTitle(soup, elm, tag, individualed=True):
 	else:
 		title = None
 
+	return format(title)
+
+def format(title):
 	if title is not None:
+		title = title.strip()
 		count = Videos.find({"title":re.compile('.*'+title+'.*')}).count()
-		if count >= 1:
+		if count >= 1 and re.match(r"[0-9]+$", title):
 			title = title+' No.'+str(count)
-
 	return title.split("｜")[0]
-
 
 def videoDesc(soup):
 	if len(soup.findAll(attrs={"name":"description"})) is not 0:
