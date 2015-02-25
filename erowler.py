@@ -45,7 +45,7 @@ lastUrl = None
 session = None
 g_snapshot = None
 
-def getNextLink(url, host, depth=0):
+def getNextLink(url, prev_url, depth=0):
 	global g_snapshot
 
 	if depth is not 0:
@@ -53,9 +53,10 @@ def getNextLink(url, host, depth=0):
 		if not ok:
 			return
 
+	url = absolute(url, prev_url)
 	print url
 
-	response = connectSite(url, host)
+	response = connectSite(url)
 
 	try :
 		soup = BeautifulSoup(response.read())
@@ -80,7 +81,7 @@ def getNextLink(url, host, depth=0):
 				g_snapshot["struct"][depth] = i
 			except IndexError:
 				g_snapshot["struct"].append(0)
-			getNextLink(link, host, depth + 1)
+			getNextLink(link, url, depth + 1)
 	return
 
 
@@ -179,10 +180,12 @@ def saveVideo(src, soup, url, tag, elm, individualed=True):
 
 	saved_at = datetime.now().strftime('%Y年%m月%d日')
 	print "saved_at : " + saved_at
-	print
 
-	owner = urlparse(url)
-	owner = host[0] + "://" + host[1]
+	parsed = urlparse(url)
+	owner = parsed[0] + "://" + parsed[1]
+	print "owner : "+owner
+
+	print
 
 	video = {
 		"title" : title,
@@ -227,34 +230,53 @@ def searchVideo(url, soup):
 		saveVideo(source['url'], soup, url, 'fc2', source, individualed)
 
 
-def connectSite(url, host):
+def absolute(url, prev_url):
+	if not re.match(r"^http", url):
+		if re.match(r"^/", url):
+			url = generateUrl(url, prev_url)
+		else:
+			url = generateUrl('/'+url, prev_url)
+	return url
+
+def generateUrl(url, prev_url):
+	parsed = urlparse(prev_url)
+	if re.match(r"^//", prev_url):
+		url = 'http//:'+parsed[1]+url
+	else:
+		#url = '://'.join(parsed[0:1])+url
+		url = parsed[0]+'://'+parsed[1]+url
+	return url
+
+def connectSite(url):
 	req = urllib2.Request(url)
 	try:
 		response = urllib2.urlopen(req)
 	#server error
 	except urllib2.HTTPError:
 		return
-	#If url is relaytive path, format it to correct format
-	except ValueError:
-		if len(url) > 1 and url[0] is not '/':
-			url = '/' + url
-		url = host + url
-		req = urllib2.Request(url)
-		try:
-			response = urllib2.urlopen(req)
-		#server error
-		except urllib2.HTTPError:
-			return
-		#does not found url
-		except urllib2.URLError:
-			print "Does not found the : " + url
-			return
-		except UnicodeEncodeError:
+		"""
+		#If url is relaytive path, format it to correct format
+		except ValueError:
+			if len(url) > 1 and url[0] is not '/':
+				url = '/' + url
+			url = host + url
+			req = urllib2.Request(url)
 			try:
-				req = urllib2.Request(url.encode('utf-8'))
 				response = urllib2.urlopen(req)
+			#server error
 			except urllib2.HTTPError:
 				return
+			#does not found url
+			except urllib2.URLError:
+				print "Does not found the : " + url
+				return
+			except UnicodeEncodeError:
+				try:
+					req = urllib2.Request(url.encode('utf-8'))
+					response = urllib2.urlopen(req)
+				except urllib2.HTTPError:
+					return
+		"""
 	#does not found url
 	except urllib2.URLError:
 		print "Does not found the : " + url
@@ -378,19 +400,13 @@ if __name__ == '__main__':
 	if len(argvs) == 2:
 		if argvs[1] == "restart":
 			url = restore()
-			p = urlparse(url)
-			host = p[0] + "://" + p[1]
 		else:
 			url = argvs[1]
 			initSnapshot(url)
-			p = urlparse(url)
-			host = p[0] + "://" + p[1]
 	elif len(argvs) == 3:
 		url = argvs[1]
 		initSnapshot(url)
 		MAX_DEPTH = int(argvs[2])
-		p = urlparse(url)
-		host = p[0] + "://" + p[1]
 	else:
 		print "引数へんじゃない？"
 		quit()
@@ -398,7 +414,7 @@ if __name__ == '__main__':
 	connectDB()
 
 	try:
-		getNextLink(url, host)
+		getNextLink(url, '/')
 		print "restart! to "+choiceUrl()
 	except:
 		traceback.print_exc(file=sys.stdout)
