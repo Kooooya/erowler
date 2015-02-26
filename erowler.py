@@ -285,16 +285,6 @@ def validateUrl(url):
 	return True
 
 
-def loginFc2():
-	global session
-	if session is None:
-		session = requests.Session()
-		session.get('http://video.fc2.com/')
-		data = {'email': 'fukushi123@gmail.com', 'pass': 'koya820'}
-		r_login = session.post('https://secure.id.fc2.com/index.php?mode=login&switch_language=en', data=data)
-		print session.cookies['PHPSESSID']
-
-
 def takeSnapshot():
 	print "take snapshot"
 	g_snapshot["Already"] = ALREADY
