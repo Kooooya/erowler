@@ -7,8 +7,11 @@ Erowler is adult video's crawler.
 
 `
 #start collecting videos
-python erowler http://origin.adult.site.com
+python erowler.py http://origin.adult.site.com
 
 #restart
-python erowler restart
+python erowler.py restart
+
+#take thumbnails
+python take_thumbnails.py
 `
